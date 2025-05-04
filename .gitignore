@@ -1,0 +1,41 @@
+# Build output
+bin/
+obj/
+out/
+
+# Entity Framework Migrations (optional — remove this line if you want to track migrations)
+Migrations/
+
+# Visual Studio Code settings
+.vscode/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Logs
+*.log
+Logs/
+
+# .NET Secret Manager
+secrets.json
+
+# ASP.NET publish folder
+publish/
+wwwroot/dist/
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+
+# Rider IDE
+.idea/
+
+# OS-specific
+.DS_Store
+Thumbs.db
