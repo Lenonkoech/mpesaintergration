@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.Mime;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using mpesaintergration.Data;
 using mpesaintergration.Models;
@@ -13,13 +14,17 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly IHttpClientFactory _clientFactory;
+    private readonly MpesaSettings _mpesaSettings;
     private ApplicationDbContext _dbcontext;
-    public HomeController(ILogger<HomeController> logger, IHttpClientFactory clientFactory,
-    ApplicationDbContext dbContext)
+    public HomeController(ILogger<HomeController> logger,
+    IHttpClientFactory clientFactory,
+    ApplicationDbContext dbContext,
+    IOptions<MpesaSettings> mpesaSettings)
     {
         _logger = logger;
         _clientFactory = clientFactory;
         _dbcontext = dbContext;
+        _mpesaSettings = mpesaSettings.Value;
     }
 
     public IActionResult Index()
@@ -40,7 +45,7 @@ public class HomeController : Controller
     public async Task<string> GetToken()
     {
         var client = _clientFactory.CreateClient("mpesa");
-        var authString = "E6W3S4VcJFOetiubonnXX7GeTfaWbavArtEtLT3D2Qiv24Fb:A7wVp6J7A7kumAf2Aox5hGA8qZAGjvWBNEh5qPUbB1jEjRgEFHDgAiY6oNslklQ0";
+        var authString = $"_{_mpesaSettings.ConsumerKey}:{_mpesaSettings.ConsumerSecret}";
         var encodedString = Convert.ToBase64String(System.Text.ASCIIEncoding.ASCII.GetBytes(authString));
         var _url = "/oauth/v1/generate?grant_type=client_credentials";
         var request = new HttpRequestMessage(HttpMethod.Get, _url);
@@ -67,10 +72,10 @@ public class HomeController : Controller
     {
         var jsonBody = JsonConvert.SerializeObject(new
         {
-            ValidationURL = "https://mydomain.com/validation",
-            ConfirmationURL = "https://mydomain.com/confirmation",
+            ValidationURL = _mpesaSettings.ValidationURL,
+            ConfirmationURL = _mpesaSettings.ConfirmationURL,
             ResponseType = "Completed",
-            Shortcode = "600991"
+            Shortcode = _mpesaSettings.Shortcode
         });
 
         var jsonBodyReady = new StringContent(

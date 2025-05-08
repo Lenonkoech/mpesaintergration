@@ -9,6 +9,11 @@ Migrations/
 # Visual Studio Code settings
 .vscode/
 
+# Ignore config files with secrets
+appsettings.Development.json
+appsettings.Local.json
+secrets.json
+
 # User-specific files
 *.suo
 *.user
