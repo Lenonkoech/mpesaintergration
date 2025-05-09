@@ -3,7 +3,6 @@ using System.Net.Mime;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using Microsoft.JSInterop;
 using mpesaintergration.Data;
 using mpesaintergration.Models;
 using Newtonsoft.Json;
@@ -15,113 +14,102 @@ public class HomeController : Controller
     private readonly ILogger<HomeController> _logger;
     private readonly IHttpClientFactory _clientFactory;
     private readonly MpesaSettings _mpesaSettings;
-    private ApplicationDbContext _dbcontext;
-    public HomeController(ILogger<HomeController> logger,
-    IHttpClientFactory clientFactory,
-    ApplicationDbContext dbContext,
-    IOptions<MpesaSettings> mpesaSettings)
+    private readonly ApplicationDbContext _dbContext;
+
+    public HomeController(
+        ILogger<HomeController> logger,
+        IHttpClientFactory clientFactory,
+        ApplicationDbContext dbContext,
+        IOptions<MpesaSettings> mpesaSettings)
     {
         _logger = logger;
         _clientFactory = clientFactory;
-        _dbcontext = dbContext;
+        _dbContext = dbContext;
         _mpesaSettings = mpesaSettings.Value;
     }
 
-    public IActionResult Index()
-    {
-        return View();
-    }
-    public IActionResult Privacy()
-    {
-        return View();
-    }
+    public IActionResult Index() => View();
+
+    public IActionResult Privacy() => View();
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult Error()
-    {
-        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-    }
+    public IActionResult Error() =>
+        View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+
+    private record Token(string Access_Token, string Expires_In);
+
     // Access token
     public async Task<string> GetToken()
     {
         var client = _clientFactory.CreateClient("mpesa");
-        var authString = $"_{_mpesaSettings.ConsumerKey}:{_mpesaSettings.ConsumerSecret}";
-        var encodedString = Convert.ToBase64String(System.Text.ASCIIEncoding.ASCII.GetBytes(authString));
-        var _url = "/oauth/v1/generate?grant_type=client_credentials";
-        var request = new HttpRequestMessage(HttpMethod.Get, _url);
-        request.Headers.Add("Authorization", $"Basic {encodedString}");
+
+        var credentials = $"{_mpesaSettings.ConsumerKey}:{_mpesaSettings.ConsumerSecret}";
+        var encodedCredentials = Convert.ToBase64String(Encoding.ASCII.GetBytes(credentials));
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/oauth/v1/generate?grant_type=client_credentials");
+        request.Headers.Add("Authorization", $"Basic {encodedCredentials}");
+
         var response = await client.SendAsync(request);
-        var mpesaResponse = await response.Content.ReadAsStringAsync();
-        Token tokenObject = JsonConvert.DeserializeObject<Token>(mpesaResponse);
-        return tokenObject.access_token;
+        response.EnsureSuccessStatusCode();
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+        var token = JsonConvert.DeserializeObject<Token>(responseBody);
+
+        return token?.Access_Token ?? throw new Exception("Failed to parse token from M-Pesa API.");
     }
 
-    class Token
-    {
-        public string access_token { get; set; }
-        public string expires_in { get; set; }
-    }
+    public IActionResult RegisterURLs() => View();
 
-    public IActionResult RegisterURLs()
-    {
-        return View();
-    }
     [HttpGet]
     [Route("register-urls")]
-    public async Task<string> RegisterMpesaUrls()
+    public async Task<IActionResult> RegisterMpesaUrls()
     {
-        var jsonBody = JsonConvert.SerializeObject(new
+        var payload = new
         {
             ValidationURL = _mpesaSettings.ValidationURL,
             ConfirmationURL = _mpesaSettings.ConfirmationURL,
             ResponseType = "Completed",
             Shortcode = _mpesaSettings.Shortcode
-        });
+        };
 
-        var jsonBodyReady = new StringContent(
-            jsonBody.ToString(),
-            Encoding.UTF8,
-            "application/json"
-        );
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
         var token = await GetToken();
         var client = _clientFactory.CreateClient("mpesa");
         client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-        var url = "/mpesa/c2b/v1/registerurl";
-        var response = await client.PostAsync(url, jsonBodyReady);
-        return await response.Content.ReadAsStringAsync();
+
+        var response = await client.PostAsync("/mpesa/c2b/v1/registerurl", content);
+        var result = await response.Content.ReadAsStringAsync();
+
+        return Content(result, "application/json");
     }
-    //Confirmation endpoint
+
     [HttpPost]
     [Route("payments/confirmation")]
     [Produces(MediaTypeNames.Application.Json)]
-    public async Task<JsonResult> PaymentConfirmation([FromBody] MpesaC2B c2bPayments)
+    public async Task<IActionResult> PaymentConfirmation([FromBody] MpesaC2B c2bPayments)
     {
-        var respond = new
+        if (!ModelState.IsValid)
         {
-            ResponseCode = 0,
-            ResponseDesc = "Processed"
-        };
-        if (ModelState.IsValid)
-        {
-            _dbcontext.Add(c2bPayments);
-            var saveResponse = await _dbcontext.SaveChangesAsync();
+            return BadRequest(new { code = 0, errors = ModelState });
         }
-        else
-        {
-            return Json(new { code = 0, errors = ModelState });
-        }
+
+        await _dbContext.AddAsync(c2bPayments);
+        await _dbContext.SaveChangesAsync();
+
         return Json(c2bPayments);
     }
-    //Payment validation
+
     [HttpPost]
     [Route("payments/validation")]
-    public async Task<JsonResult> PaymentValidation([FromBody] MpesaC2B c2bPayments)
+    public IActionResult PaymentValidation([FromBody] MpesaC2B c2bPayments)
     {
-        var respond = new
+        var response = new
         {
             ResponseCode = 0,
             ResponseDesc = "Processed"
         };
-        return Json(respond);
+
+        return Json(response);
     }
 }

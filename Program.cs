@@ -14,10 +14,11 @@ builder.Services.AddHttpClient("mpesa", c =>
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
  ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection"))));
-var app = builder.Build();
 
 // Add mpesa configs
 builder.Services.Configure<MpesaSettings>(builder.Configuration.GetSection("Mpesa"));
+
+var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
