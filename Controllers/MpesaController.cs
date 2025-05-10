@@ -1,3 +1,5 @@
+using System.Buffers.Text;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Net.Mime;
 using System.Text;
@@ -20,7 +22,7 @@ public class HomeController : Controller
         ILogger<HomeController> logger,
         IHttpClientFactory clientFactory,
         ApplicationDbContext dbContext,
-        IOptions<MpesaSettings> mpesaSettings)
+        IOptionsSnapshot<MpesaSettings> mpesaSettings)
     {
         _logger = logger;
         _clientFactory = clientFactory;
@@ -29,13 +31,7 @@ public class HomeController : Controller
     }
 
     public IActionResult Index() => View();
-
-    public IActionResult Privacy() => View();
-
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult Error() =>
-        View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-
     private record Token(string Access_Token, string Expires_In);
 
     // Access token
@@ -57,19 +53,19 @@ public class HomeController : Controller
 
         return token?.Access_Token ?? throw new Exception("Failed to parse token from M-Pesa API.");
     }
-
-    public IActionResult RegisterURLs() => View();
-
+    // C2B payment intergrations
     [HttpGet]
     [Route("register-urls")]
     public async Task<IActionResult> RegisterMpesaUrls()
     {
         var payload = new
         {
-            ValidationURL = _mpesaSettings.ValidationURL,
-            ConfirmationURL = _mpesaSettings.ConfirmationURL,
+            _mpesaSettings.ShortCode,
             ResponseType = "Completed",
-            Shortcode = _mpesaSettings.Shortcode
+            _mpesaSettings.ConfirmationURL,
+            _mpesaSettings.ValidationURL,
+
+
         };
 
         var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
@@ -81,6 +77,30 @@ public class HomeController : Controller
         var response = await client.PostAsync("/mpesa/c2b/v1/registerurl", content);
         var result = await response.Content.ReadAsStringAsync();
 
+        return Content(result, "application/json");
+    }
+
+    public IActionResult Paymentrequest() => View();
+
+    [HttpPost]
+    [Route("makePayment")]
+
+    public async Task<IActionResult> MakePayment()
+    {
+        var payment = new
+        {
+            _mpesaSettings.ShortCode,
+            _mpesaSettings.CommandID,
+            Amount = 1,
+            _mpesaSettings.Msisdn,
+            _mpesaSettings.BillRefNumber
+        };
+        var content = new StringContent(JsonConvert.SerializeObject(payment), Encoding.UTF8, "application/json");
+        var token = await GetToken();
+        var client = _clientFactory.CreateClient("mpesa");
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+        var response = await client.PostAsync("/mpesa/c2b/v1/simulate", content);
+        var result = await response.Content.ReadAsStringAsync();
         return Content(result, "application/json");
     }
 
@@ -111,5 +131,43 @@ public class HomeController : Controller
         };
 
         return Json(response);
+    }
+    // Mpesa Express Intergrations
+
+    [HttpPost]
+    [Route("mpesaExpressPayment")]
+    public async Task<IActionResult> MpesaExpress([FromForm] string phonenumber)
+    {
+        string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+        string password = GeneratePassword(_mpesaSettings.BusinessShortCode,
+        _mpesaSettings.PassKey, timestamp);
+
+        var payment = new
+        {
+            _mpesaSettings.BusinessShortCode,
+            _mpesaSettings.TransactionType,
+            _mpesaSettings.Amount,
+            PartyA = phonenumber,
+            _mpesaSettings.PartyB,
+            PhoneNumber = phonenumber,
+            _mpesaSettings.CallBackURL,
+            _mpesaSettings.AccountReference,
+            _mpesaSettings.TransactionDesc,
+            Password = password,
+            Timestamp = timestamp
+        };
+        var content = new StringContent(JsonConvert.SerializeObject(payment), Encoding.UTF8, "application/json");
+        var token = await GetToken();
+        var client = _clientFactory.CreateClient("mpesa");
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+        var response = await client.PostAsync("/mpesa/stkpush/v1/processrequest", content);
+        var result = await response.Content.ReadAsStringAsync();
+        return Content(result, "application/json");
+    }
+    public static string GeneratePassword(string shortCode, string passKey, string timestamp)
+    {
+        string rawPassword = shortCode + passKey + timestamp;
+        byte[] bytes = Encoding.UTF8.GetBytes(rawPassword);
+        return Convert.ToBase64String(bytes);
     }
 }

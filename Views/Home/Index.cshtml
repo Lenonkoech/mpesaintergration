@@ -1,8 +1,51 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "M-Pesa Integration";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="container mt-5">
+    <h2 class="mb-4 text-center">M-Pesa Integration</h2>
+
+    <div class="row">
+        <!-- Register URLs -->
+        <div class="col-md-5">
+            <div class="card mb-4">
+                <div class="card-header">Register C2B URLs</div>
+                <div class="card-body">
+                    <button id="registerBtn" class="btn btn-primary w-100">Register URL</button>
+                    <div id="registerFeedback" class="mt-3 small text-muted"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simulate C2B -->
+        <div class="col-md-5">
+            <div class="card mb-4">
+                <div class="card-header">Simulate C2B Payment</div>
+                <div class="card-body">
+                    <form id="simulateForm">
+                        <button type="submit" class="btn btn-success w-100">Simulate Payment</button>
+                    </form>
+                    <div id="simulateFeedback" class="mt-3 small text-muted"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STK Push -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">M-Pesa Express (STK Push)</div>
+                <div class="card-body">
+                    <form id="stkForm">
+                        <div class="mb-3">
+                            <label for="phoneNumber" class="form-label mt-1 text-center">Enter Phone Number</label>
+                            <input type="text" class="form-control" id="phoneNumber" name="phoneNumber"
+                                placeholder="07XXXXXXXX" required />
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Pay Now</button>
+                    </form>
+                    <div id="stkResponse" class="mt-3 small text-muted"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
